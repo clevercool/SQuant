@@ -22,7 +22,7 @@ pip install ./squant-kernel
 
 ## ImageNet Path
 
-Please set your dataset path using "--dataset_path /your/imagenet_path".
+Please prepare your dataset with [this script](https://github.com/pytorch/examples/blob/main/imagenet/extract_ILSVRC.sh) and set your dataset path using "--dataset_path /your/imagenet_path".
 
 ## Run SQuant
 
