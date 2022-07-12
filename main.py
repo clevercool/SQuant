@@ -63,13 +63,13 @@ args = parser.parse_args()
 
 ### logging setting
 output_path = get_ckpt_path(args)
-set_util_logging(output_path + "/training.log")
+set_util_logging(output_path + "/squant.log")
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
     datefmt='%m/%d/%Y %H:%M:%S',
     level=logging.INFO,
     handlers=[
-        logging.FileHandler(output_path + "/training.log"),
+        logging.FileHandler(output_path + "/squant.log"),
         logging.StreamHandler()
     ]
 )

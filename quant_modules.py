@@ -22,9 +22,15 @@ import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import quant_cuda
 import time
 from quant_affine import *
+import warnings
+try:
+    from quant_cuda import rounding_loop as SQuant_func
+except ImportError:
+    warnings.warn("CUDA-based SQuant is not installed! PyTorch-based SQuant will lead to a prolonged quantization process.")
+    from squant_function import SQuant_func
+
 
 logger = logging.getLogger(__name__)
 class Quantizer(nn.Module):
@@ -51,7 +57,6 @@ class Quantizer(nn.Module):
 
         self.name = None
         self.has_zero = True
-        self.quant_value = None
         self.quant_weight_tensor = None
         self.register_buffer('x_max', torch.tensor(1.0))
         self.register_buffer('x_min', torch.tensor(1.0))
@@ -101,46 +106,10 @@ class Quantizer(nn.Module):
         values, _ = torch.sort(values)
         return values
 
-    def int_value(self, q_type="narrow"):
-        bit_width = self.bit.item()
-        B = bit_width
-        if self.is_signed:
-            B = bit_width - 1
-        values = []
-        if self.has_zero:
-            values.append(0.)
-        else:
-            values.append(0.5)
-
-        for i in range(1, 2 ** B):
-            values.append(i)
-            if self.is_signed:
-                values.append(-i)
-        if q_type == "int" and self.is_signed:
-            # [-128, ..., 0, ..., 127]
-            values.append(- 2 ** B)
-
-        assert(2 ** bit_width >= len(values))
-        return self.convert_tensor(values)
-
-    def _quantization(self, tensor, quant_value):
-        shape = tensor.shape
-        quant_tensor = tensor.view(-1)
-        quant_value = quant_value.type_as(quant_tensor)
-        quant_tensor, quant_idx = quant_cuda.quant(quant_tensor, quant_value)
-        quant_tensor = quant_tensor.view(shape)
-        quant_idx    = quant_idx.view(shape).type(torch.long)
-        return quant_tensor, quant_idx
-    
-    def adaptive_round(self, x, t_max = None, t_min = None):
+    def adaptive_round(self, x, t_min = None, t_max = None):
         # Get the rounding integer and fraction.
-        rounding_number, rounding_idx = self._quantization(torch.clamp(x, torch.min(self.quant_value), torch.max(self.quant_value)), self.quant_value)
+        rounding_number = x.round()
         rounding_error  = rounding_number - x
-
-        if t_max is None:
-            t_max = torch.max(self.quant_value)
-        if t_min is None:
-            t_min = torch.min(self.quant_value)
             
         up_number = rounding_number.clone()
         up_error  = rounding_error.clone()
@@ -175,7 +144,7 @@ class Quantizer(nn.Module):
             up_priority *= 0.0
             down_priority *= 0.0
 
-            quant_cuda.rounding_loop(
+            SQuant_func(
                 flip_number,
                 flip_up_number,
                 flip_down_number,
@@ -187,12 +156,12 @@ class Quantizer(nn.Module):
                 up_number.view(conver_shape), 
                 up_error.view(conver_shape), 
                 up_priority.view(conver_shape), 
-                up_order.type_as(up_priority).view(conver_shape), 
+                up_order, 
 
                 down_number.view(conver_shape), 
                 down_error.view(conver_shape), 
                 down_priority.view(conver_shape),
-                down_order.type_as(down_priority).view(conver_shape),
+                down_order,
             )
         
         if self.squant_c:
@@ -201,7 +170,7 @@ class Quantizer(nn.Module):
             _, up_order = torch.sort(up_priority.view(conver_shape), descending=True)
             _, down_order = torch.sort(down_priority.view(conver_shape), descending=True)
 
-            quant_cuda.rounding_loop(
+            SQuant_func(
                 flip_number,
                 flip_up_number,
                 flip_down_number,
@@ -213,13 +182,14 @@ class Quantizer(nn.Module):
                 up_number.view(conver_shape), 
                 up_error.view(conver_shape), 
                 up_priority.view(conver_shape), 
-                up_order.type_as(up_priority).view(conver_shape), 
+                up_order, 
 
                 down_number.view(conver_shape), 
                 down_error.view(conver_shape), 
                 down_priority.view(conver_shape),
-                down_order.type_as(down_priority).view(conver_shape)
+                down_order
             )
+
 
         assert (rounding_number.unique().numel() <= 2 ** self.bit.item())
         return rounding_number
@@ -271,15 +241,17 @@ class Quantizer(nn.Module):
                     scale, zero_point = asymmetric_linear_quantization_params(self.bit, x_min, x_max)
                     quant_tensor = linear_quantize(tensor, scale, zero_point, inplace=False)
 
-                    if self.mode == "squant":
-                        quant_tensor = self.adaptive_round(quant_tensor)
-
                     n = 2 ** (self.bit - 1)
+
+                    if self.mode == "squant":
+                        quant_tensor = self.adaptive_round(quant_tensor, -n, n - 1)
+                    else:
+                        quant_tensor = quant_tensor.round()
+
                     quant_tensor = torch.clamp(quant_tensor, -n, n - 1)
                     quant_tensor = linear_dequantize(quant_tensor, scale, zero_point, inplace=False)
                     return quant_tensor
 
-                self.quant_value = self.int_value(q_type="int").cuda()
                 if not self.is_input:
                     #Weight quantization
                     start = time.perf_counter()
@@ -288,10 +260,9 @@ class Quantizer(nn.Module):
                     logger.info("Quantzation time: %f ms" %(elapsed * 1000))
                 else:
                     #Activation quantization
-
                     # min
                     if self.is_signed:
-                        self.x_min = alpha / self.quant_value.max() * self.quant_value.min()
+                        self.x_min = -alpha
                     else:
                         self.x_min.data = torch.zeros_like(alpha)
                     # max

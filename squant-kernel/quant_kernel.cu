@@ -74,7 +74,7 @@ __device__ __forceinline__ void rounding_forward_cuda_kernel(
     torch::TensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> number_,
     torch::TensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> error_,
     torch::TensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> priority_,
-    torch::TensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> order_,
+    torch::TensorAccessor<long,1,torch::RestrictPtrTraits,size_t> order_,
 
     torch::TensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> error_1,
     torch::TensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> priority_1,
@@ -90,7 +90,7 @@ __device__ __forceinline__ void rounding_forward_cuda_kernel(
     rounding_error_sum = fabsf(rounding_error_sum);
     auto idx = order_;
     size_t topk = __float2int_rn(fabsf(rounding_error_sum));
-    bool over_calibration = (topk >= fabsf(rounding_error_sum));
+    bool over_squant = (topk >= fabsf(rounding_error_sum));
 
     for(size_t i = 0; i < topk; i++)
     {   
@@ -98,7 +98,7 @@ __device__ __forceinline__ void rounding_forward_cuda_kernel(
         rounding_error_[idx_] =  error_[idx_];
         rounding_number_[idx_] = number_[idx_];
     }
-    if(over_calibration)
+    if(over_squant)
     {
         size_t idx_c = idx[topk - 1];
         priority_1[idx_c] = fabsf(rounding_error_[idx_c]);
@@ -123,12 +123,12 @@ __global__ void rounding_loop_forward_cuda_kernel(
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> up_number_,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> up_error_,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> up_priority_,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> up_order_,
+    torch::PackedTensorAccessor<long,3,torch::RestrictPtrTraits,size_t> up_order_,
 
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> down_number_,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> down_error_,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> down_priority_,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> down_order_,
+    torch::PackedTensorAccessor<long,3,torch::RestrictPtrTraits,size_t> down_order_,
 
     const size_t input_channel,
     const size_t element_number
@@ -266,12 +266,12 @@ void rounding_loop_forward_cuda(
                     up_number_.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
                     up_error_.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
                     up_priority_.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                    up_order_.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                    up_order_.packed_accessor<long,3,torch::RestrictPtrTraits,size_t>(),
 
                     down_number_.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
                     down_error_.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
                     down_priority_.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                    down_order_.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                    down_order_.packed_accessor<long,3,torch::RestrictPtrTraits,size_t>(),
                     
                     size_1,
                     size_2
