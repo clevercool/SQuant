@@ -65,3 +65,21 @@ python -u main.py --model resnet18 --mode squant -wb 4 -ab 4  -s 12
 
 3. Ablation study
     - Reproduce the same results as in the manuscript.
+
+## SQuant is Accurate.
+
+As shown below, SQuant significantly outperforms all other SOTA DFQ methods, even with synthetic dataset calibrating their networks. The benefit of SQuant becomes more prominent as the bit-width decreases. SQuant outperforms the PTQ methods, i.e., DFQ, ZeroQ, and DSG, by more than **30%** on all models with 4-bit quantization. It is noteworthy that SQuant surpasses GDFQ in all cases and even surpasses more than **15%** in ResNet50 under 4-bit quantization, although GDFQ is a quantization-aware training method.
+
+<div>
+<img src=./image/acc.png width=100%>
+</div>
+
+
+## SQuant is Fast.
+A single layer takes SQuant just **3 milliseconds** on average because SQuant does not involve complex algorithms, such as back-propagation and fine-tuning. That means we can implement the SQuant algorithm on inference-only devices such as smartphones and IoT devices and quantize the network on the fly.
+
+SQuant is more than $10,000\times$ faster than GDFQ in quantization time with higher accuracy.
+
+<div>
+<img src=./image/time.png width=100%>
+</div>
