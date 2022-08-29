@@ -1,4 +1,7 @@
 # SQuant ICLR2022
+
+## Publication
+If you use SQuant in your research, please cite our paper:
 ```
 @inproceedings{
 guo2022squant,
