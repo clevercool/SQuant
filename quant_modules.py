@@ -190,7 +190,7 @@ class Quantizer(nn.Module):
                 down_order
             )
 
-
+        rounding_number = torch.clamp(rounding_number, t_min, t_max)
         assert (rounding_number.unique().numel() <= 2 ** self.bit.item())
         return rounding_number
 
