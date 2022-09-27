@@ -111,7 +111,7 @@ class AsymmetricQuantFunction(Function):
     Currently only support inference, but not support back-propagation.
     """
     @staticmethod
-    def forward(ctx, x, k, x_min=None, x_max=None):
+    def forward(ctx, x, k, x_min, x_max):
         """
         x: single-precision value to be quantized
         k: bit-setting for x
@@ -119,18 +119,23 @@ class AsymmetricQuantFunction(Function):
         x_max=None
         """
 
-        # if x_min is None or x_max is None or (sum(x_min == x_max) == 1
-        #                                       and x_min.numel() == 1):
-        #     x_min, x_max = x.min(), x.max()
+        signed = x_min < 0
         scale, zero_point = asymmetric_linear_quantization_params(
-            k, x_min, x_max)
+            k, x_min, x_max, integral_zero_point = True, signed=signed )
+
+        # print(zero_point)
         new_quant_x = linear_quantize(x, scale, zero_point, inplace=False).round()
         n = 2**(k - 1)
-        new_quant_x = torch.clamp(new_quant_x, -n, n - 1)
+        if signed:
+            new_quant_x = torch.clamp(new_quant_x, -n, n - 1)
+        else:
+            new_quant_x = torch.clamp(new_quant_x, 0, 2 * n - 1)
+
         quant_x = linear_dequantize(new_quant_x,
                                     scale,
                                     zero_point,
                                     inplace=False)
+
         return torch.autograd.Variable(quant_x)
 
     @staticmethod

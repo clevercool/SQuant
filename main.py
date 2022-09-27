@@ -37,7 +37,7 @@ parser.add_argument('--mode', default='int', type=str,
                     help='quantizer mode')
 parser.add_argument('--dataset', default='imagenet', type=str, 
                     help='dataset name')
-parser.add_argument('--dataset_path', default='/state/partition/imagenet-raw-data', type=str, 
+parser.add_argument('--dataset_path', default='~/imagenet-raw-data', type=str, 
                     help='dataset path')
 parser.add_argument('--model', default='resnet18', type=str, 
                     help='model name')
